@@ -1,0 +1,127 @@
+library(psychometric)
+library(ltm)
+library(eRm)
+library(CTT)
+library(reshape)
+library(ggplot2)
+library(plyr)
+library(irr)
+setwd("L:/NOEP/Statistical Analysis")
+#read in pretest data
+raw_pre<-read.csv("NOEP_pretest_module_6.csv",header=TRUE)#original pretest datad
+id_pre<-raw_pre$Person
+raw_pre<-raw_pre[,2:26]#raw data without test taking identifiers
+
+raw_post<-read.csv("NOEP_posttest_module_6.csv",header=TRUE)#or
+id_post<-raw_post$Person
+raw_post<-raw_post[,2:26]
+key_6_pre<-read.csv("key_NOEP_mod_6_pre.csv",header=FALSE)#key for raw data pre
+key_6_post<-read.csv("key_NOEP_mod_6_post.csv",header=FALSE)#key for raw data post
+###Score the pretest data
+score_pre<-score(raw_pre,key=key_6_pre,output.scored=TRUE,ID=id_pre,rel=TRUE) #score all items for pre test
+cumulative.score.pre<-score_pre$score  #total score for each test taker for pre test
+cumulative.score.pre<-as.numeric(cumulative.score.pre)
+
+##### score the posttest data
+
+score_post<-score(raw_post,key=key_6_post,output.scored=TRUE,ID=id_post,rel=TRUE) #score all items for pre test
+cumulative.score.post<-score_post$score  #total score for each test taker for pre test
+cumulative.score.post<-as.numeric(cumulative.score.post)
+
+
+
+score.matrix<-score_post$scored #matrix of 1s and 0s of scored item
+rel<-score_post$reliability  #calculate reliability
+cumulative.score.pre<-as.data.frame(cumulative.score.pre) #convert to data frame
+cumulative.score.post<-as.data.frame(cumulative.score.post) #convert to data frame
+colnames(cumulative.score.pre)[1]<-"score"
+colnames(cumulative.score.post)[1]<-"score"
+#Histogram of pre
+ggplot(cumulative.score.pre,aes(x=score)) + geom_histogram(aes(y=..density..),binwidth=1, colour="black", fill="white")+labs(title="NOEP Pretest Module 6 Scores")+xlab("Total Score") +ylab("% of Total")+theme(plot.title = element_text(size = rel(2)))+stat_function(fun=dnorm, args=list(mean=mean(cumulative.score.pre[,1]), sd=sd(cumulative.score.pre[,1])))
+ggplot(cumulative.score.post,aes(x=score)) + geom_histogram(aes(y=..density..),binwidth=1, colour="black", fill="white")+labs(title="NOEP Posttest Module 6 Scores")+xlab("Total Score") +ylab("% of Total")+theme(plot.title = element_text(size = rel(2)))+stat_function(fun=dnorm, args=list(mean=mean(cumulative.score.post[,1]), sd=sd(cumulative.score.post[,1])))
+
+#create frequency table of cumulative scores
+write.csv((table(cumulative.score.pre)),"freq_mod_6_pre.csv")
+write.csv((table(cumulative.score.post)),"freq_mod_6_post.csv")
+
+mean.pre<-mean(cumulative.score.pre[,1]) #mean of cumulative score
+median.pre<-median(cumulative.score.pre[,1]) #median of cum score
+sd.pre<-sd(cumulative.score.pre[,1])
+
+
+mean.post<-mean(cumulative.score.post[,1]) #mean of cumulative score
+median.post<-median(cumulative.score.post[,1]) #median of cum score
+sd.post<-sd(cumulative.score.post[,1])
+
+
+#data_red<-data[,4:53]#reduce data to essential components
+alpha_del<-reliability(score.matrix, itemal=TRUE) #obtain cronbach's alpha
+write.csv(alpha_del$alpha.if.deleted,file="alpha_del_mod_6.csv")
+
+#Fleiss Kappa
+kappam.fleiss(score.matrix, exact = FALSE, detail = FALSE)
+cron_alpha<-alpha(score.matrix) #calculate cronbach alpha
+cron_alpha
+nrows<-nrow(score.matrix)# calculate number of rows
+alpha.CI(cron_alpha,nrows, 50,level=0.95) # calculate CI for Cronbach alpha
+discrim(score.matrix) #calculate discrimination for each item
+
+
+write.csv(item.exam(score.matrix, discrim=TRUE),file="mod_6_item.csv")
+#Calculate quantiles
+quantile(cumulative.score.post[,],probs=seq(0,1,0.10),type=3)
+
+# New items
+score.matrix.pre<-score_pre$scored
+cron_alpha_pre<-alpha(score.matrix.pre)
+write.csv(item.exam(score.matrix.pre, discrim=TRUE),file="mod_6_item_pre.csv")
+
+########### Item Response Theory##########################################
+
+#Constrained Rasch Model
+###fit <- rasch(score.matrix, constraint = cbind(ncol(score.matrix)+1, 1))
+####summary(fit)
+####coef(fit, prob = TRUE, order = TRUE)
+
+#GoF.rasch(fit, B = 100)
+#Unconstrained Rasch Model
+fit_2 <- rasch(score.matrix,)
+summary(fit_2)
+write.csv(coef(fit_2, prob = TRUE, order = TRUE),file="rasch_mod_3.csv")
+GoF.rasch(fit_2, B = 20)
+
+fsc <- factor.scores(fit_2)
+plot(fsc, include.items = TRUE, main = "Kernel Density Estimate for Person Parameters")
+
+
+#Graphing
+
+plot(fit_2, legend = TRUE)
+
+score.matrix<-score.matrix[,-3] #removed I3 because everyone got it correct
+res <- RM(score.matrix) #fit a rasch model to the score matrix
+
+write.csv(coef(res), "summary_res.csv")
+data_coef_res<-read.csv("summary_res.csv", header=TRUE)
+plotPImap(res)
+
+pres <- person.parameter(res)
+lrt <- LRtest(res, splitcr="median",se = TRUE)
+lrt
+plotGOF(lrt,beta.subset=c(1:50), tlab="item", conf=list(ia=FALSE,col="blue",lty=2))
+pp <- person.parameter(res)
+plot(pp)
+plotGOF(lrt, conf = list())
+itemfit(pp)
+t11 <- NPtest(score.matrix, method = "T11")
+pcm<-PCM(score.matrix)
+gof.res <- gofIRT(pres)
+gof.res
+summary(gof.res)
+
+
+library(mirt)
+(mod1 <- mirt(data_red, 1))
+(mod2 <- mirt(data_red, 2))
+frequenc_res<-residuals(mod1, restype = "exp")
+write.table(frequenc_res, file="freq.csv", sep=",", col.names=TRUE)
