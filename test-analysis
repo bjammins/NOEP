@@ -1,0 +1,45 @@
+library(reshape)
+library(plyr)
+library(combinat)
+library(ggplot2)
+library(RColorBrewer)
+setwd("L:/NOEP")
+data<-read.csv("noep_poep_analysis_09162013.csv",header=TRUE) #CONVERTED THE DATE TO FORMAT 03/14/2013
+data$ORDER_DATE<-as.Date(as.character(data$ORDER_DATE),"%m/%d/%y") 
+#data$year<-substring(data$ORDER_DATE, 1, 4)
+data$year<-as.factor(data$year)
+#write.csv(levels(data$PRODUCT_CODE), file="NOEP POEP prod crosswalk.csv") create the crosswalk
+cross<-read.csv("NOEP POEP prod crosswalk.csv", header=TRUE)
+
+levels(data$PRODUCT_CODE)<-cross$crosswalk
+data<-data[!is.na(data$PRODUCT_CODE),] #remove null values
+
+
+data$ORDER_NUMBER<-as.factor(data$ORDER_NUMBER)
+
+#Product Sales
+
+data$PRODUCT_CODE<-factor(data$PRODUCT_CODE,c("POEP1","POEP2","POEP3","POEP Module","NOEP1","NOEP2","Combo","License"))#set the order for the graph
+
+#select colors
+#my.cols<-c("#EDF8E9","#BAE4B3","#74C476","#238B45","#FB6A4A","#CB181D","#CBC9E2","#6A51A3")
+#my.cols.poep <- brewer.pal(8, "Blues")
+#my.cols.noep <- brewer.pal(2, "Greens")
+#my.cols.comb<-brewer.pal(2,"Reds")
+
+
+d<-ddply(data,.(year,PRODUCT_CODE),summarize,amount=sum(EXTENDED_AMOUNT))
+
+ggplot(d, aes(x=year, y=amount, fill=PRODUCT_CODE)) + geom_bar(position="stack") + 
+  labs(title="POEP and NOEP Product Sales (as of 9/16/2013)")+xlab("Year") +ylab("Sales (in thousands of dollars)")+theme(plot.title = element_text(size = rel(2)))+
+  scale_y_continuous(breaks=c(0,100000,200000,300000,400000,500000), labels=c("0", "100", "200","300","400","500"))+theme(legend.position="none")
+
+
+#Units
+d<-ddply(data,.(year,PRODUCT_CODE),summarize,number=sum(QUANTITY_ORDERED),amount=sum(EXTENDED_AMOUNT))
+
+ggplot(d, aes(x=year, y=number, fill=PRODUCT_CODE)) + geom_bar() + 
+  facet_grid(~PRODUCT_CODE)+labs(title="POEP and NOEP Number of Units Sold (as of 4/30/2013)")+xlab("Year") +ylab("Sales in units")+theme(plot.title = element_text(size = rel(2)))+
+  scale_y_continuous(breaks=c(0,25,50,75,100), labels=c("0", "25", "50","75","100"))+theme(legend.position="none")
+
+write.csv(d, file="noep and poep data table.csv")
